@@ -1,5 +1,5 @@
 import { videoQueue } from './queue';
-import { generateVideoEdit } from './claude';
+import { generateVideoEdit } from './ai';
 import { buildSafeArgs, getVideoDuration, runFFmpeg } from './ffmpeg-engine';
 import { getFallbackArgs } from './presets';
 import { Job } from './types';

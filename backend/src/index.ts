@@ -46,8 +46,12 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 app.listen(PORT, () => {
   console.log(`[Server] Running on http://localhost:${PORT}`);
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn('[Server] WARNING: ANTHROPIC_API_KEY not set — Claude calls will fail, fallback will be used');
+  if (process.env.ANTHROPIC_API_KEY) {
+    console.log('[AI] Provider: Claude (claude-sonnet-4-6)');
+  } else {
+    const model = process.env.OLLAMA_MODEL ?? 'qwen2.5:3b';
+    const url   = process.env.OLLAMA_URL   ?? 'http://localhost:11434';
+    console.log(`[AI] Provider: Ollama  model=${model}  url=${url}`);
   }
 
   startWorker();
