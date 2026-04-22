@@ -1,8 +1,8 @@
 import { videoQueue } from './queue';
 import { generateVideoEdit } from './ai';
+import { generateWithRules } from './rule-engine';
 import { buildSafeArgs, getVideoDuration, runFFmpeg } from './ffmpeg-engine';
 import { getFallbackArgs } from './presets';
-import { Job } from './types';
 
 const MAX_RETRIES = 2;
 
@@ -13,64 +13,74 @@ async function processJob(jobId: string): Promise<void> {
   videoQueue.markProcessing(jobId);
   console.log(`[Worker] Starting job ${jobId} | preset=${job.preset} format=${job.format}`);
 
-  let ffmpegArgs: string[] | null = null;
-  let claudeResponse: { editPlan: string; ffmpegCommand: string; description: string } | null = null;
-
-  // 1. Get video duration
   const duration = await getVideoDuration(job.inputPath);
-  console.log(`[Worker] Video duration: ${duration.toFixed(2)}s`);
+  console.log(`[Worker] Duration: ${duration.toFixed(2)}s`);
 
-  // 2. Try Claude → FFmpeg command
+  let ffmpegArgs: string[] | null = null;
+
+  // ── 1. Try AI (Claude → Ollama) ────────────────────────────────────────────
   try {
-    claudeResponse = await generateVideoEdit(job.prompt, job.preset, job.format, duration);
+    const aiResult = await generateVideoEdit(job.prompt, job.preset, job.format, duration);
 
     videoQueue.update(jobId, {
-      editPlan: claudeResponse.editPlan,
-      description: claudeResponse.description,
-      ffmpegCommand: claudeResponse.ffmpegCommand,
+      editPlan:      aiResult.editPlan,
+      description:   aiResult.description,
+      ffmpegCommand: aiResult.ffmpegCommand,
     });
 
-    console.log(`[Worker] Claude command: ${claudeResponse.ffmpegCommand}`);
-
-    ffmpegArgs = buildSafeArgs(claudeResponse.ffmpegCommand, job.inputPath, job.outputPath);
-
-    if (!ffmpegArgs) {
-      console.warn('[Worker] Claude command failed validation — using fallback');
-    }
+    ffmpegArgs = buildSafeArgs(aiResult.ffmpegCommand, job.inputPath, job.outputPath);
+    if (!ffmpegArgs) console.warn('[Worker] AI command failed validation');
   } catch (err) {
-    console.error('[Worker] Claude error:', err);
+    console.error('[Worker] AI generation failed:', (err as Error).message);
   }
 
-  // 3. Fallback if Claude failed or command was invalid
+  // ── 2. Rule engine (always works, reads prompt intelligently) ──────────────
   if (!ffmpegArgs) {
-    console.log('[Worker] Using fallback FFmpeg command');
-    ffmpegArgs = getFallbackArgs(job.inputPath, job.outputPath, job.format, duration);
+    console.log('[Worker] Running rule engine');
+    try {
+      const ruled = generateWithRules(job.prompt, job.preset, job.format, duration);
+      const args  = ruled.ffmpegArgs.map(a =>
+        a === 'INPUT_PATH'  ? job.inputPath  :
+        a === 'OUTPUT_PATH' ? job.outputPath : a
+      );
+      ffmpegArgs = args;
 
-    const fallbackCmd = `ffmpeg -y -i "${job.inputPath}" ... "${job.outputPath}"`;
+      videoQueue.update(jobId, {
+        editPlan:      ruled.editPlan,
+        description:   ruled.description,
+        ffmpegCommand: ruled.ffmpegCommand,
+      });
+    } catch (err) {
+      console.error('[Worker] Rule engine failed:', err);
+    }
+  }
+
+  // ── 3. Hard fallback (guaranteed) ─────────────────────────────────────────
+  if (!ffmpegArgs) {
+    console.log('[Worker] Using hard fallback');
+    ffmpegArgs = getFallbackArgs(job.inputPath, job.outputPath, job.format, duration);
     videoQueue.update(jobId, {
-      ffmpegCommand: fallbackCmd,
-      editPlan: 'Fallback: fade in/out + text overlay',
-      description: 'Processed with stable fallback preset.',
+      editPlan:      'Fallback: scale + fade',
+      description:   'Processed with safe fallback.',
+      ffmpegCommand: `ffmpeg -y -i <input> [fallback filters] <output>`,
     });
   }
 
-  // 4. Execute FFmpeg (with retry)
+  // ── 4. Execute (with retry using hard fallback) ────────────────────────────
   let lastError = '';
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      console.log(`[Worker] Retry ${attempt} — switching to hard fallback`);
+      ffmpegArgs = getFallbackArgs(job.inputPath, job.outputPath, job.format, duration);
+    }
     try {
-      if (attempt > 0) {
-        console.log(`[Worker] Retry attempt ${attempt} for job ${jobId}`);
-        // On retry, use fallback args
-        ffmpegArgs = getFallbackArgs(job.inputPath, job.outputPath, job.format, duration);
-      }
-
       await runFFmpeg(ffmpegArgs);
       videoQueue.markDone(jobId);
-      console.log(`[Worker] Job ${jobId} done`);
+      console.log(`[Worker] Job ${jobId} DONE`);
       return;
     } catch (err) {
-      lastError = err instanceof Error ? err.message : String(err);
-      console.error(`[Worker] FFmpeg error (attempt ${attempt}): ${lastError}`);
+      lastError = (err as Error).message;
+      console.error(`[Worker] FFmpeg attempt ${attempt} failed:`, lastError);
     }
   }
 
@@ -80,10 +90,9 @@ async function processJob(jobId: string): Promise<void> {
 export function startWorker(): void {
   videoQueue.on('job:ready', (jobId: string) => {
     processJob(jobId).catch(err => {
-      console.error('[Worker] Unhandled error in processJob:', err);
+      console.error('[Worker] Unhandled error:', err);
       videoQueue.markFailed(jobId, 'Internal worker error');
     });
   });
-
   console.log(`[Worker] Started — max concurrency: ${videoQueue.maxConcurrency}`);
 }

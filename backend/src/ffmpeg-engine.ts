@@ -62,7 +62,8 @@ export function buildSafeArgs(
   }
 
   const withoutBin = template.replace(/^ffmpeg\s+/, '');
-  const parsed = parseFFmpegCommand(withoutBin);
+  const parsed = parseFFmpegCommand(withoutBin)
+    .filter((a, i) => !(i === 0 && a === '-y')); // runFFmpeg prepends -y, strip duplicate
 
   // Substitute placeholders
   const args = parsed.map(arg => {

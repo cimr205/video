@@ -128,6 +128,23 @@ export async function generateVideoEdit(
     console.log('[AI] Using Claude');
     return generateWithClaude(prompt, preset, format, duration);
   }
-  console.log('[AI] Using Ollama');
-  return generateWithOllama(prompt, preset, format, duration);
+
+  const ollamaUrl = process.env.OLLAMA_URL ?? 'http://localhost:11434';
+  const ollamaReachable = await fetch(`${ollamaUrl}/api/tags`, { signal: AbortSignal.timeout(2000) })
+    .then(r => r.ok)
+    .catch(() => false);
+
+  if (ollamaReachable) {
+    console.log('[AI] Using Ollama');
+    return generateWithOllama(prompt, preset, format, duration);
+  }
+
+  console.log('[AI] Using rule engine (offline)');
+  const { generateWithRules } = await import('./rule-engine');
+  const result = generateWithRules(prompt, preset, format, duration);
+  return {
+    editPlan:      result.editPlan,
+    ffmpegCommand: result.ffmpegCommand,
+    description:   result.description,
+  };
 }
