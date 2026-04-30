@@ -1,8 +1,14 @@
 import { useState, useEffect, useRef, FormEvent } from 'react';
+import { Player } from '@remotion/player';
 import { Job, Preset, VideoFormat, createJob, listJobs, getJob, RemotionJob, createRemotionJob, listRemotionJobs, getRemotionJob, getRemotionOutputUrl } from './api';
 import { VideoUpload } from './components/VideoUpload';
 import { PresetSelector } from './components/PresetSelector';
 import { JobCard } from './components/JobCard';
+import { PromptVideo as PromptVideoComponent } from './remotion/PromptVideo';
+import type { PromptVideoProps } from './remotion/types';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const PromptVideoPlayer = PromptVideoComponent as React.ComponentType<any>;
 
 const POLL_INTERVAL = 2500;
 
@@ -439,6 +445,28 @@ export default function App() {
                         />
                       </div>
                     )}
+
+                    {/* Live preview */}
+                    {job.props && (() => {
+                      const props = job.props as PromptVideoProps;
+                      const totalFrames = props.scenes?.reduce((s, sc) => s + sc.durationInFrames, 0) ?? 300;
+                      const isVertical = props.format === '9:16';
+                      return (
+                        <div style={{ marginTop: '0.75rem', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                          <Player
+                            component={PromptVideoPlayer}
+                            inputProps={props}
+                            durationInFrames={Math.max(totalFrames, 1)}
+                            compositionWidth={isVertical ? 1080 : 1920}
+                            compositionHeight={isVertical ? 1920 : 1080}
+                            fps={30}
+                            style={{ width: '100%', display: 'block' }}
+                            controls
+                            loop
+                          />
+                        </div>
+                      );
+                    })()}
 
                     {/* Error */}
                     {job.error && (

@@ -30,7 +30,20 @@ export interface CtaScene {
   subtext?: string;
 }
 
-export type SceneData = (TitleScene | BulletsScene | StatScene | CtaScene) & {
+export interface QuoteScene {
+  type: 'quote';
+  quote: string;
+  attribution?: string;
+}
+
+export interface HighlightScene {
+  type: 'highlight';
+  emoji: string;
+  heading: string;
+  subtext?: string;
+}
+
+export type SceneData = (TitleScene | BulletsScene | StatScene | CtaScene | QuoteScene | HighlightScene) & {
   durationInFrames: number;
 };
 
