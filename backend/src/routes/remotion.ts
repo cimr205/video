@@ -18,7 +18,7 @@ const jobs = new Map<string, {
   progress: number;
   error: string | null;
   outputPath: string;
-  props: object | null;
+  props: Record<string, unknown> | null;
   createdAt: string;
 }>();
 
@@ -65,10 +65,11 @@ async function processJob(id: string) {
   console.log(`[Remotion] Starting job ${id}`);
 
   const props = await generateRemotionProps(job.prompt, job.format);
-  job.props = props;
+  const propsRecord = props as unknown as Record<string, unknown>;
+  job.props = propsRecord;
   console.log(`[Remotion] Props generated for ${id}`);
 
-  await renderPromptVideo(props, job.outputPath, (progress) => {
+  await renderPromptVideo(propsRecord, job.outputPath, (progress) => {
     job.progress = progress;
   });
 
@@ -101,7 +102,9 @@ router.get('/:id/output', (req: Request, res: Response) => {
   fs.createReadStream(job.outputPath).pipe(res);
 });
 
-function toPublic(job: ReturnType<typeof jobs.get>!) {
+type JobEntry = NonNullable<ReturnType<typeof jobs.get>>;
+
+function toPublic(job: JobEntry) {
   return {
     id: job.id,
     status: job.status,

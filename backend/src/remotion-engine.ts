@@ -30,7 +30,7 @@ async function getBundlePath(): Promise<string> {
 }
 
 export async function renderPromptVideo(
-  props: object,
+  props: Record<string, unknown>,
   outputPath: string,
   onProgress?: (p: number) => void,
 ): Promise<void> {

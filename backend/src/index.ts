@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { startWorker } from './worker';
 import jobsRouter from './routes/jobs';
+import remotionRouter from './routes/remotion';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 const UPLOADS_DIR = path.resolve(__dirname, '../uploads');
@@ -28,6 +29,7 @@ app.get('/api/health', (_req, res) => {
 
 // API routes
 app.use('/api/jobs', jobsRouter);
+app.use('/api/remotion', remotionRouter);
 
 // Serve frontend in production
 if (fs.existsSync(FRONTEND_DIST)) {

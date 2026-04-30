@@ -57,3 +57,43 @@ export async function deleteJob(id: string): Promise<void> {
 export function getOutputUrl(id: string): string {
   return `${BASE}/jobs/${id}/output`;
 }
+
+export interface RemotionJob {
+  id: string;
+  status: 'pending' | 'processing' | 'done' | 'failed';
+  prompt: string;
+  format: '16:9' | '9:16';
+  progress: number;
+  error: string | null;
+  props: object | null;
+  createdAt: string;
+}
+
+export async function createRemotionJob(prompt: string, format: '16:9' | '9:16'): Promise<RemotionJob> {
+  const res = await fetch(`${BASE}/remotion`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, format }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: 'Unknown error' }));
+    throw new Error(err.error ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function getRemotionJob(id: string): Promise<RemotionJob> {
+  const res = await fetch(`${BASE}/remotion/${id}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function listRemotionJobs(): Promise<{ jobs: RemotionJob[] }> {
+  const res = await fetch(`${BASE}/remotion`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export function getRemotionOutputUrl(id: string): string {
+  return `${BASE}/remotion/${id}/output`;
+}
